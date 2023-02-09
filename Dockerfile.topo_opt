@@ -1,0 +1,43 @@
+FROM satsuper/spgrid_topo_opt:taichi-legacy
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update && \
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    curl ca-certificates gpg-agent && \
+  rm -rf /var/lib/apt/lists/*
+# repository to install Intel(R) oneAPI Libraries
+RUN curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2023.PUB | apt-key add -
+RUN echo "deb [trusted=yes] https://apt.repos.intel.com/oneapi all main " > /etc/apt/sources.list.d/oneAPI.list
+
+RUN apt-get update && apt-get upgrade -y && \
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    intel-oneapi-mkl-devel intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic  && \
+  rm -rf /var/lib/apt/lists/*
+ENV PATH="/opt/intel/oneapi/compiler/latest/linux/bin/intel64/:$PATH"
+
+RUN cd /root/taichi/projects && \
+    git clone https://github.com/yuanming-hu/spgrid_topo_opt.git --depth=1
+
+ENV TC_MKL_PATH=/opt/intel/oneapi/mkl/latest/lib/intel64/
+ENV CUDA_ARCH=0
+ENV TC_USE_DOUBLE=1
+
+WORKDIR /root/taichi/projects/spgrid_topo_opt
+
+# Patch SIMD header with immintrin.h
+COPY SPGrid_SIMD_Utilities.h.patch SPGrid_SIMD_Utilities.h.patch
+RUN patch external/SPGrid/Tools/SPGrid_SIMD_Utilities.h < SPGrid_SIMD_Utilities.h.patch && \
+    rm SPGrid_SIMD_Utilities.h.patch
+
+RUN cd solver && \
+    make
+
+RUN apt-get update && apt-get install -y \
+      libxrandr-dev \
+      libxinerama-dev \
+      libxcursor-dev \
+      libxi-dev \
+      && \
+      rm -rf /var/lib/apt/lists/*
+
+RUN ti build

@@ -1,0 +1,10 @@
+--- SPGrid_SIMD_Utilities.h	2023-02-09 14:02:30.000000000 +0000
++++ SPGrid_SIMD_Utilities_patched.h	2023-02-09 14:03:21.000000000 +0000
+@@ -10,6 +10,7 @@
+ #include <type_traits>
+ #include <iostream>
+ #include <cstdint>
++#include <immintrin.h>
+ 
+ namespace SPGrid{
+ 
