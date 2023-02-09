@@ -1,0 +1,51 @@
+FROM ubuntu:18.04
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update && apt-get install -y \
+        build-essential \
+        cmake \
+        git \
+        libx11-dev \
+        wget \
+        && \
+    rm -rf /var/cache/apt/archives /var/lib/apt/lists/*
+
+WORKDIR /root
+
+# Use miniconda for python as it avoids all kinds of issues getting a newer python version
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    bash Miniconda3-latest-Linux-x86_64.sh -p /root/miniconda -b && \
+    rm Miniconda3-latest-Linux-x86_64.sh
+ENV PATH="/root/miniconda/bin:$PATH"
+RUN conda init bash
+
+RUN python -m pip install \
+        colorama \
+        flask \
+        flask_cors \
+        GitPython \
+        numpy \
+        Pillow \
+        psutil \
+        pybind11 \
+        PyQt5 \
+        requests \
+        scipy \
+        yapf
+
+RUN git clone https://github.com/yuanming-hu/taichi.git --branch legacy --depth=1 && \
+    cd taichi && \
+    git clone https://github.com/yuanming-hu/taichi_runtime external/lib -b linux --depth 1 && \
+    git submodule update --init --recursive
+
+# Fix libtbbmalloc linking error
+RUN echo "/root/taichi/external/lib" > /etc/ld.so.conf.d/libtbbmalloc.conf && \
+    ldconfig
+
+ENV TAICHI_NUM_THREADS=8
+ENV TAICHI_REPO_DIR=/root/taichi
+ENV PYTHONPATH=/root/taichi/python/:
+ENV PATH="/root/taichi/bin:$PATH"
+
+RUN python -c "import taichi as tc" && \
+    rm -rf /root/taichi/build/CMakeFiles
