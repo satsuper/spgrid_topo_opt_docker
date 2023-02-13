@@ -1,23 +1,17 @@
-FROM ubuntu:18.04
+FROM intel/oneapi-iotkit:2022.3.1-devel-ubuntu18.04
 SHELL ["/bin/bash", "-c"]
-
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    git \
-    libx11-dev \
-    wget \
-    && \
-    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root
 
-# Use miniconda for python as it avoids all kinds of issues getting a newer python version
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-    bash Miniconda3-latest-Linux-x86_64.sh -p /root/miniconda -b && \
-    rm Miniconda3-latest-Linux-x86_64.sh
-ENV PATH="/root/miniconda/bin:$PATH"
-RUN conda init bash
+RUN apt-get update && apt-get install -y \
+    libx11-dev \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libxi-dev \
+    libnlopt-dev \
+    && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install \
     colorama \
@@ -38,10 +32,6 @@ RUN git clone https://github.com/yuanming-hu/taichi.git --branch legacy --depth=
     git clone https://github.com/yuanming-hu/taichi_runtime external/lib -b linux --depth 1 && \
     git submodule update --init --recursive
 
-# Fix libtbbmalloc linking error
-RUN echo "/root/taichi/external/lib" > /etc/ld.so.conf.d/libtbbmalloc.conf && \
-    ldconfig
-
 ENV TAICHI_NUM_THREADS=8
 ENV TAICHI_REPO_DIR=/root/taichi
 ENV PYTHONPATH=/root/taichi/python/:
@@ -49,3 +39,22 @@ ENV PATH="/root/taichi/bin:$PATH"
 
 RUN python -c "import taichi as tc" && \
     rm -rf /root/taichi/build/CMakeFiles
+
+RUN cd /root/taichi/projects && \
+    git clone https://github.com/yuanming-hu/spgrid_topo_opt.git --depth=1
+
+ENV TC_MKL_PATH=/opt/intel/oneapi/mkl/latest/lib/intel64/
+ENV CUDA_ARCH=0
+ENV TC_USE_DOUBLE=1
+
+WORKDIR /root/taichi/projects/spgrid_topo_opt
+
+# Patch SIMD header with immintrin.h
+COPY SPGrid_SIMD_Utilities.h.patch SPGrid_SIMD_Utilities.h.patch
+RUN patch external/SPGrid/Tools/SPGrid_SIMD_Utilities.h < SPGrid_SIMD_Utilities.h.patch && \
+    rm SPGrid_SIMD_Utilities.h.patch
+
+RUN cd solver && \
+    make
+
+RUN ti build
